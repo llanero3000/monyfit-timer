@@ -6,6 +6,7 @@ import Link from "next/link";
 
 type PhaseType = "prepare" | "work" | "rest" | "longBreak" | "custom";
 type Mode = "editing" | "running" | "paused" | "finished";
+type ThemeId = "dark" | "neon" | "ocean" | "sepia" | "soft";
 
 interface Interval {
   id: number;
@@ -13,6 +14,15 @@ interface Interval {
   label: string;
   duration: number; // segundos
 }
+
+interface SavedWorkout {
+  id: string;
+  name: string;
+  intervals: Interval[];
+  createdAt: number;
+}
+
+const STORAGE_KEY = "monyfit_saved_custom_workouts_v1";
 
 function formatTime(totalSeconds: number) {
   const minutes = Math.floor(totalSeconds / 60);
@@ -62,6 +72,7 @@ function getPhaseDefaults(type: PhaseType): { label: string; color: string } {
   }
 }
 
+// Fondo por fase (para la PANTALLA DE ENTRENAMIENTO)
 function getPhaseBgClass(type: PhaseType): string {
   switch (type) {
     case "prepare":
@@ -75,6 +86,23 @@ function getPhaseBgClass(type: PhaseType): string {
     case "custom":
     default:
       return "from-slate-800 via-slate-900 to-black";
+  }
+}
+
+// Fondo por TEMA (para el EDITOR)
+function getThemeBgClass(theme: ThemeId): string {
+  switch (theme) {
+    case "neon":
+      return "from-[#1e0538] via-[#020617] to-[#0f172a]";
+    case "ocean":
+      return "from-[#020617] via-[#022c4b] to-[#020617]";
+    case "sepia":
+      return "from-[#3b2c26] via-[#2b211d] to-black";
+    case "soft":
+      return "from-[#111827] via-[#1f2937] to-[#020617]";
+    case "dark":
+    default:
+      return "from-[#020617] via-[#020617] to-black";
   }
 }
 
@@ -114,6 +142,51 @@ export default function CustomWorkoutPage() {
 
   // PRE-START global (3-2-1-0 antes de la rutina)
   const [isPrestart, setIsPrestart] = useState(false);
+
+  // Tema visual (igual que HIIT / Settings)
+  const [theme, setTheme] = useState<ThemeId>("dark");
+
+  // Rutinas guardadas
+  const [savedWorkouts, setSavedWorkouts] = useState<SavedWorkout[]>([]);
+
+  // Cargar tema y rutinas guardadas
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const rawTheme = window.localStorage.getItem(
+      "monyfit_theme"
+    ) as ThemeId | null;
+    if (
+      rawTheme === "dark" ||
+      rawTheme === "neon" ||
+      rawTheme === "ocean" ||
+      rawTheme === "sepia" ||
+      rawTheme === "soft"
+    ) {
+      setTheme(rawTheme);
+    } else {
+      setTheme("dark");
+    }
+
+    const rawSaved = window.localStorage.getItem(STORAGE_KEY);
+    if (rawSaved) {
+      try {
+        const parsed = JSON.parse(rawSaved) as SavedWorkout[];
+        if (Array.isArray(parsed)) {
+          setSavedWorkouts(parsed);
+        }
+      } catch {
+        // si falla el parse, ignoramos
+      }
+    }
+  }, []);
+
+  function persistSaved(next: SavedWorkout[]) {
+    setSavedWorkouts(next);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    }
+  }
 
   async function ensureToneStarted() {
     if (!toneReady) {
@@ -347,6 +420,56 @@ export default function CustomWorkoutPage() {
   const totalTimeFormatted = formatTime(totalSeconds);
   const isRunnable = intervals.length > 0 && totalSeconds > 0;
 
+  // ---------- GUARDAR / CARGAR RUTINAS ----------
+
+  function handleSaveWorkout() {
+    if (!isRunnable) return;
+
+    if (typeof window === "undefined") return;
+
+    const defaultName = `Rutina ${savedWorkouts.length + 1}`;
+    const name = window
+      .prompt("Nombre para este entrenamiento:", defaultName)
+      ?.trim();
+
+    if (!name) return;
+
+    const newWorkout: SavedWorkout = {
+      id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      name,
+      intervals: intervals.map((it) => ({ ...it })), // copia
+      createdAt: Date.now(),
+    };
+
+    const nextList = [newWorkout, ...savedWorkouts];
+    persistSaved(nextList);
+  }
+
+  function handleLoadWorkout(id: string) {
+    const workout = savedWorkouts.find((w) => w.id === id);
+    if (!workout) return;
+
+    // re-asignamos IDs para evitar conflictos con nextIdRef
+    let nextId = 1;
+    const rebuilt: Interval[] = workout.intervals.map((it) => ({
+      ...it,
+      id: nextId++,
+    }));
+    nextIdRef.current = nextId;
+
+    setIntervals(rebuilt);
+    setMode("editing");
+    setCurrentIndex(0);
+    setRemaining(0);
+    setIsPrestart(false);
+    zeroHandledRef.current = false;
+  }
+
+  function handleDeleteWorkout(id: string) {
+    const nextList = savedWorkouts.filter((w) => w.id !== id);
+    persistSaved(nextList);
+  }
+
   // ---------- CONTROL PRINCIPAL ----------
 
   async function startRoutine() {
@@ -391,14 +514,18 @@ export default function CustomWorkoutPage() {
     : null;
 
   // Fondo:
-  // - Si estamos en prestart → gradiente MonyFit que te gustó
-  // - Si no, usa el color de la fase actual
+  // - EDITOR → tema seleccionado
+  // - RUNNING:
+  //    - prestart → gradiente emerald que te gustó
+  //    - normal → color de fase
   const bgClass =
-    mode !== "editing" && currentInterval
-      ? isPrestart
-        ? "from-slate-900 via-emerald-500 to-black"
-        : getPhaseBgClass(currentInterval.type)
-      : "from-slate-800 via-slate-900 to-black";
+    mode === "editing"
+      ? getThemeBgClass(theme)
+      : isPrestart
+      ? "from-slate-900 via-emerald-500 to-black"
+      : currentInterval
+      ? getPhaseBgClass(currentInterval.type)
+      : getThemeBgClass(theme);
 
   return (
     <main
@@ -430,16 +557,31 @@ export default function CustomWorkoutPage() {
             tiempo.
           </p>
 
-          {/* Resumen */}
+          {/* Resumen + Guardar */}
           <div className="flex items-center justify-between text-xs mb-4">
-            <p className="text-slate-300">
-              Intervalos:{" "}
-              <span className="font-semibold">{intervals.length}</span>
-            </p>
-            <p className="text-slate-300">
-              Tiempo total:{" "}
-              <span className="font-semibold">{totalTimeFormatted}</span>
-            </p>
+            <div>
+              <p className="text-slate-300">
+                Intervalos:{" "}
+                <span className="font-semibold">{intervals.length}</span>
+              </p>
+              <p className="text-slate-300">
+                Tiempo total:{" "}
+                <span className="font-semibold">{totalTimeFormatted}</span>
+              </p>
+            </div>
+
+            <button
+              onClick={handleSaveWorkout}
+              disabled={!isRunnable}
+              className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-[11px] font-semibold border transition
+                ${
+                  isRunnable
+                    ? "bg-slate-800 hover:bg-slate-700 border-fuchsia-500/60 text-slate-100"
+                    : "bg-slate-800 border-slate-600 text-slate-500 cursor-not-allowed"
+                }`}
+            >
+              💾 Guardar rutina
+            </button>
           </div>
 
           {/* Sonido + Vibración */}
@@ -641,6 +783,53 @@ export default function CustomWorkoutPage() {
               Ejercicio personalizado
             </button>
           </div>
+
+          {/* Rutinas guardadas */}
+          {savedWorkouts.length > 0 && (
+            <div className="mb-5 border-t border-slate-700 pt-3">
+              <p className="text-xs font-semibold text-slate-200 mb-2">
+                📂 Rutinas guardadas
+              </p>
+              <div className="max-h-40 overflow-y-auto space-y-2 pr-1">
+                {savedWorkouts.map((w) => {
+                  const total = w.intervals.reduce(
+                    (acc, it) => acc + it.duration,
+                    0
+                  );
+                  return (
+                    <div
+                      key={w.id}
+                      className="flex items-center justify-between bg-slate-950/70 border border-slate-700 rounded-xl px-3 py-2 text-[11px]"
+                    >
+                      <div className="flex-1 mr-2">
+                        <p className="text-slate-100 font-semibold truncate">
+                          {w.name}
+                        </p>
+                        <p className="text-slate-400">
+                          Duración: {formatTime(total)} ·{" "}
+                          {w.intervals.length} bloques
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleLoadWorkout(w.id)}
+                          className="px-2 py-1 rounded-full bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border border-emerald-400"
+                        >
+                          Cargar
+                        </button>
+                        <button
+                          onClick={() => handleDeleteWorkout(w.id)}
+                          className="px-2 py-1 rounded-full bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/60"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Botón principal */}
           <div className="flex flex-col items-center gap-3 border-t border-slate-700 pt-4">
