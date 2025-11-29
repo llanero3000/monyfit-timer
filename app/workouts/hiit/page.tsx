@@ -7,6 +7,99 @@ import Image from "next/image";
 type Mode = "config" | "running" | "paused" | "finished";
 type Phase = "work" | "rest";
 
+// 🔹 Temas (mismos IDs que en home/settings)
+type ThemeId =
+  | "dark"
+  | "neon"
+  | "ocean"
+  | "sepia"
+  | "soft"
+  | "light"
+  | "neonGreen";
+
+// 🔹 Gradientes por tema y estado de HIIT
+const HIIT_THEME_BG: Record<
+  ThemeId,
+  {
+    config: string;
+    work: string;
+    rest: string;
+    finished: string;
+    prestart: string;
+  }
+> = {
+  dark: {
+    config: "from-slate-800 via-slate-900 to-black",
+    work: "from-fuchsia-700 via-slate-900 to-black",
+    rest: "from-cyan-700 via-slate-900 to-black",
+    finished: "from-emerald-500 via-slate-900 to-black",
+    prestart: "from-slate-900 via-emerald-500/60 to-black",
+  },
+  neon: {
+    config: "from-purple-950 via-slate-950 to-black",
+    work: "from-fuchsia-700 via-purple-950 to-black",
+    rest: "from-cyan-700 via-purple-950 to-black",
+    finished: "from-emerald-500 via-purple-950 to-black",
+    prestart: "from-purple-950 via-emerald-500/60 to-black",
+  },
+  ocean: {
+    config: "from-slate-900 via-sky-950 to-slate-950",
+    work: "from-fuchsia-700 via-sky-950 to-slate-950",
+    rest: "from-cyan-700 via-sky-950 to-slate-950",
+    finished: "from-emerald-500 via-sky-950 to-slate-950",
+    prestart: "from-slate-900 via-emerald-500/60 to-sky-950",
+  },
+  sepia: {
+    config: "from-stone-900 via-amber-950 to-black",
+    work: "from-fuchsia-700 via-amber-950 to-black",
+    rest: "from-cyan-700 via-amber-950 to-black",
+    finished: "from-emerald-500 via-amber-900 to-black",
+    prestart: "from-stone-900 via-emerald-500/60 to-black",
+  },
+  soft: {
+    config: "from-slate-900 via-slate-800 to-slate-950",
+    work: "from-fuchsia-700 via-slate-800 to-slate-950",
+    rest: "from-cyan-700 via-slate-800 to-slate-950",
+    finished: "from-emerald-500 via-slate-800 to-slate-950",
+    prestart: "from-slate-900 via-emerald-500/60 to-slate-950",
+  },
+  light: {
+    // Light mode clarito pero aún legible con texto oscuro
+    config: "from-slate-200 via-slate-100 to-slate-300",
+    work: "from-fuchsia-300 via-slate-100 to-slate-300",
+    rest: "from-cyan-300 via-slate-100 to-slate-300",
+    finished: "from-emerald-300 via-slate-100 to-slate-300",
+    prestart: "from-amber-200 via-slate-100 to-slate-300",
+  },
+  neonGreen: {
+    // Verde neón gamer 😅
+    config: "from-slate-950 via-emerald-900 to-black",
+    work: "from-fuchsia-700 via-emerald-900 to-black",
+    rest: "from-cyan-700 via-emerald-900 to-black",
+    finished: "from-lime-400 via-emerald-900 to-black",
+    prestart: "from-slate-900 via-lime-500/70 to-black",
+  },
+
+
+};
+
+
+function getHiitBgClass(
+  theme: ThemeId,
+  mode: Mode,
+  phase: Phase | null,
+  isPrestart: boolean
+): string {
+  const t = HIIT_THEME_BG[theme] ?? HIIT_THEME_BG.dark;
+
+  if (isPrestart) return t.prestart;
+  if (mode === "config") return t.config;
+  if (mode === "finished") return t.finished;
+  if (phase === "work") return t.work;
+  if (phase === "rest") return t.rest;
+  return t.config;
+}
+
 function formatTime(totalSeconds: number) {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
@@ -24,23 +117,6 @@ function formatBigTime(totalSeconds: number) {
   return formatTime(totalSeconds);
 }
 
-// Fondo según fase
-function getPhaseBgClass(mode: Mode, phase: Phase | null): string {
-  if (mode === "config") {
-    return "from-slate-800 via-slate-900 to-black";
-  }
-  if (mode === "finished") {
-    return "from-emerald-500 via-slate-900 to-black";
-  }
-  if (phase === "work") {
-    return "from-fuchsia-700 via-slate-900 to-black";
-  }
-  if (phase === "rest") {
-    return "from-cyan-700 via-slate-900 to-black";
-  }
-  return "from-slate-800 via-slate-900 to-black";
-}
-
 // Vibración segura (solo si existe y está activada)
 function triggerVibration(enabled: boolean, pattern: number | number[]) {
   if (!enabled) return;
@@ -54,6 +130,28 @@ function triggerVibration(enabled: boolean, pattern: number | number[]) {
 }
 
 export default function HiitPage() {
+  // 🔹 Tema actual (lo leemos de localStorage)
+  const [theme, setTheme] = useState<ThemeId>("dark");
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+const raw = window.localStorage.getItem("monyfit_theme") as ThemeId | null;
+const allowed: ThemeId[] = [
+  "dark",
+  "neon",
+  "ocean",
+  "sepia",
+  "soft",
+  "light",
+  "neonGreen",
+];
+if (raw && allowed.includes(raw)) {
+  setTheme(raw);
+} else {
+  setTheme("dark");
+}
+  }, []);
+
   // Config (permiten "" mientras escribes)
   const [workSeconds, setWorkSeconds] = useState<number | "">(20);
   const [restSeconds, setRestSeconds] = useState<number | "">(10);
@@ -258,7 +356,7 @@ export default function HiitPage() {
 
     // PRE-START: 3-2-1-0 con fondo “prepare”
     setMode("running");
-    setPhase("work"); // para lógica y para que ya cuente como fase de trabajo
+    setPhase("work");
     setCurrentRound(1);
     setIsPrestart(true);
     setRemaining(3);
@@ -282,10 +380,8 @@ export default function HiitPage() {
     zeroHandledRef.current = false;
   }
 
-  // Fondo: si es prestart, usamos el amarillo “prepare”
-const bgClass = isPrestart
-  ? "from-slate-900 via-emerald-500/60 to-black"
-  : getPhaseBgClass(mode, phase);
+  // 🔹 Fondo según tema + fase
+  const bgClass = getHiitBgClass(theme, mode, phase, isPrestart);
 
   // ---------- HANDLERS DE INPUT ----------
 
@@ -325,9 +421,11 @@ const bgClass = isPrestart
   // ---------- UI ----------
 
   return (
-    <main
-      className={`min-h-screen bg-gradient-to-br ${bgClass} text-slate-100 flex items-center justify-center`}
-    >
+<main
+  className={`min-h-screen bg-gradient-to-br ${bgClass} ${
+    theme === "light" ? "text-slate-900" : "text-slate-100"
+  } flex items-center justify-center`}
+>
       {/* VISTA CONFIG */}
       {mode === "config" && (
         <div className="w-full max-w-xl mx-auto px-6 py-7 bg-slate-900/70 backdrop-blur rounded-2xl shadow-xl border border-slate-700">

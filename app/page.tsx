@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 
@@ -10,8 +10,39 @@ import { EffectCoverflow } from "swiper/modules";
 import "swiper/css";
 import "swiper/css/effect-coverflow";
 
+// 👇 mismos IDs que en Settings (sin light)
+type ThemeId =
+  | "dark"
+  | "neon"
+  | "ocean"
+  | "sepia"
+  | "soft"
+  | "neonGreen";
+
+// Gradiente por tema para el fondo del Home
+const THEME_BG: Record<ThemeId, string> = {
+  dark: "from-[#020617] via-[#020617] to-black",
+  neon: "from-[#1e0538] via-[#020617] to-[#0f172a]",
+  ocean: "from-[#020617] via-[#022c4b] to-[#020617]",
+  sepia: "from-[#3b2c26] via-[#2b211d] to-black",
+  soft: "from-[#111827] via-[#1f2937] to-[#020617]",
+  neonGreen: "from-black via-emerald-800 to-lime-500",
+};
+
 export default function Home() {
   const [activeIndex, setActiveIndex] = useState(0);
+  const [theme, setTheme] = useState<ThemeId>("dark");
+
+  // Leer tema guardado en localStorage (el mismo de Settings)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const raw = window.localStorage.getItem("monyfit_theme") as ThemeId | null;
+    if (raw && (Object.keys(THEME_BG) as ThemeId[]).includes(raw)) {
+      setTheme(raw);
+    }
+  }, []);
+
+  const themeBgClass = THEME_BG[theme] ?? THEME_BG.dark;
 
   const modes = [
     {
@@ -40,7 +71,9 @@ export default function Home() {
   ];
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-[#020617] via-[#020617] to-black text-slate-100 flex items-center justify-center">
+    <main
+      className={`min-h-screen bg-gradient-to-br ${themeBgClass} text-slate-100 flex items-center justify-center`}
+    >
       <div className="w-full max-w-4xl px-4 py-8 flex flex-col items-center">
         {/* Logo + encabezado */}
         <div className="flex flex-col items-center mb-8">
@@ -84,7 +117,6 @@ export default function Home() {
               slideShadows: false,
             }}
             onSlideChange={(swiper) => {
-              // realIndex = índice real (porque loop duplica slides)
               setActiveIndex(swiper.realIndex);
             }}
             className="w-full py-2"
@@ -102,11 +134,7 @@ export default function Home() {
                     href={mode.href ?? "#"}
                     className={`group relative w-full transition-transform duration-300 ${
                       mode.href ? "cursor-pointer" : "cursor-default"
-                    } ${
-                      isActive
-                        ? "scale-105"
-                        : "scale-90 opacity-70"
-                    }`}
+                    } ${isActive ? "scale-105" : "scale-90 opacity-70"}`}
                   >
                     <div
                       className={`
@@ -133,7 +161,6 @@ export default function Home() {
                           relative overflow-hidden
                         `}
                       >
-                        {/* Overlay oscuro para texto legible */}
                         <div className="absolute inset-0 bg-slate-950/60" />
 
                         <div className="relative flex flex-col h-full">
@@ -214,6 +241,21 @@ export default function Home() {
             })}
           </Swiper>
         </div>
+
+{/* Botón de Settings arriba a la derecha */}
+<div className="absolute top-4 right-4 z-20">
+<Link
+  href="/settings"
+  className="h-10 w-10 rounded-full flex items-center justify-center
+             bg-slate-900/60 border border-fuchsia-500/20 backdrop-blur 
+             shadow-[0_0_12px_rgba(200,107,244,0.4)]
+             hover:shadow-[0_0_18px_rgba(200,107,244,0.8)]
+             transition text-lg text-fuchsia-300"
+>
+  ⚙️
+</Link>
+</div>
+
 
         {/* Consejo abajo */}
         <div className="mt-2 text-center px-4">
