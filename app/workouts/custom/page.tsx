@@ -149,8 +149,21 @@ export default function CustomWorkoutPage() {
   // Rutinas guardadas
   const [savedWorkouts, setSavedWorkouts] = useState<SavedWorkout[]>([]);
 
-  // Cargar tema y rutinas guardadas
-  useEffect(() => {
+// Helper para guardar en localStorage
+function persistWorkouts(next: SavedWorkout[]) {
+  setSavedWorkouts(next);
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(
+      STORAGE_KEY, // el mismo que ya usas
+      JSON.stringify(next)
+    );
+  }
+}
+
+// Eliminar rutina guardada (LO QUE FALTABA)
+function deleteWorkout(id: string) {
+  persistWorkouts(savedWorkouts.filter((w) => w.id !== id));
+}  useEffect(() => {
     if (typeof window === "undefined") return;
 
     const rawTheme = window.localStorage.getItem(
@@ -822,7 +835,7 @@ export default function CustomWorkoutPage() {
     const ok = window.confirm(
       `¿Seguro que quieres borrar “${w.name}”? Esto no se puede deshacer.`
     );
-    if (ok) deleteWorkout(name);
+    if (ok) deleteWorkout(w.id);
   }}
   className="text-red-400 hover:text-red-300"
 >
