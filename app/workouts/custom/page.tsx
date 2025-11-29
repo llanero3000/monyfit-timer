@@ -817,12 +817,17 @@ export default function CustomWorkoutPage() {
                         >
                           Cargar
                         </button>
-                        <button
-                          onClick={() => handleDeleteWorkout(w.id)}
-                          className="px-2 py-1 rounded-full bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/60"
-                        >
-                          ✕
-                        </button>
+<button
+  onClick={() => {
+    const ok = window.confirm(
+      `¿Seguro que quieres borrar “${w.name}”? Esto no se puede deshacer.`
+    );
+    if (ok) deleteWorkout(name);
+  }}
+  className="text-red-400 hover:text-red-300"
+>
+  ✕
+</button>
                       </div>
                     </div>
                   );
